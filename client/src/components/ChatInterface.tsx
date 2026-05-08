@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { type ChatMessage } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,7 @@ interface ChatInterfaceProps {
   isLoading?: boolean;
   streamingContent?: string;
   language?: SupportedLanguage;
+  onNewAssistantMessage?: (message: ChatMessage) => void; // for auto TTS + stop listening
 }
 
 export function ChatInterface({
@@ -21,6 +22,7 @@ export function ChatInterface({
   isLoading,
   streamingContent = "",
   language = "en",
+  onNewAssistantMessage,
 }: ChatInterfaceProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
@@ -31,6 +33,18 @@ export function ChatInterface({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, streamingContent]);
+
+  // Auto TTS new assistant messages
+  const prevMessagesLengthRef = useRef(messages.length);
+  useEffect(() => {
+    if (messages.length > prevMessagesLengthRef.current) {
+      const newMsg = messages[messages.length - 1];
+      if (newMsg.role === 'assistant' && onNewAssistantMessage) {
+        onNewAssistantMessage(newMsg);
+      }
+    }
+    prevMessagesLengthRef.current = messages.length;
+  }, [messages, onNewAssistantMessage]);
 
   const handleTextToSpeech = (message: ChatMessage) => {
     if (speakingMessageId === message.id) {

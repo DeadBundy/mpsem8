@@ -310,7 +310,8 @@ export function registerRoutes(app: Express): Server {
         return res.status(sessionResult.status).json({ error: sessionResult.error });
       }
 
-      const duration = Math.floor((Date.now() - sessionResult.session.startedAt.getTime()) / 1000);
+      const duration = Math.max(0, Math.floor((Date.now() - sessionResult.session.startedAt.getTime()) / 1000));
+      console.log(`Ending session ${sessionId} with duration ${duration}s`);
       const updatedSession = await storage.endSession(sessionId, duration);
       
       res.json({ success: true, session: updatedSession });

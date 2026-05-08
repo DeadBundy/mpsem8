@@ -345,7 +345,7 @@ export interface TherapyContext {
 export async function generateTherapyResponse(
   sessionId: string,
   userMessage: string,
-  context: TherapyContext
+  context: TherapyContext & { isNewSession?: boolean }
 ): Promise<string> {
   const language = context.language || "en";
   const detectedLanguage = detectInputLanguage(userMessage);
@@ -365,6 +365,16 @@ export async function generateTherapyResponse(
   const retrievedMemory = await retrieveMemory(sessionId, normalizedMessage);
   const retrievedKnowledge = await retrieveKnowledge(fusedEmotion.emotion, intent);
 
+  let firstMessagePrompt = '';
+  if (context.isNewSession) {
+    firstMessagePrompt = `\n\n*** THIS IS THE USER\'S FIRST MESSAGE IN THEIR FIRST SESSION EVER. ***
+- Respond with a warm, welcoming greeting that makes them feel safe and understood
+- Examples: "Hi, welcome. Take your time, we can start wherever feels easiest for you." or "Hello. I\'m here when you\'re ready."
+- Keep it brief and inviting
+- Acknowledge it is their first time without making it awkward
+- Transition gently to inviting their first thoughts`;
+  }
+
   const prompt = buildSystemPrompt(
     intent,
     fusedEmotion,
@@ -373,7 +383,7 @@ export async function generateTherapyResponse(
     conversationMemory,
     retrievedMemory,
     retrievedKnowledge,
-  );
+  ) + firstMessagePrompt;
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: prompt },

@@ -11,7 +11,9 @@ import { PrivacyBadge } from "@/components/PrivacyBadge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CrisisAlert } from "@/components/CrisisAlert";
 import { SourcesSafetyCard } from "@/components/SourcesSafetyCard";
-import { VoiceModeDialog } from "@/components/VoiceModeDialog";
+import { speakText } from "@/lib/speech";
+import { getSpeechLocale } from "@/lib/language";
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -46,8 +48,6 @@ export default function Home() {
   const [webcamError, setWebcamError] = useState<string>("");
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [showCrisisAlert, setShowCrisisAlert] = useState(false);
-  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
-  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -124,6 +124,7 @@ export default function Home() {
       return response;
     },
     onSuccess: (data) => {
+      console.log('Session started:', data.sessionId);
       setSessionId(data.sessionId);
       localStorage.setItem("mindwellai-sessionId", data.sessionId);
       setIsSessionActive(true);
@@ -156,6 +157,7 @@ export default function Home() {
       await apiRequest("POST", "/api/sessions/end", { sessionId });
     },
     onSuccess: () => {
+      console.log('Session ended with ID:', sessionId);
       stopWebcam();
       localStorage.removeItem("mindwellai-sessionId");
       setIsSessionActive(false);
@@ -199,6 +201,7 @@ export default function Home() {
           language: selectedLanguage,
           emotion: emotion || null,
           emotionConfidence: emotionConfidence ? emotionConfidence.toString() : null,
+          isNewSession: messages.length === 0,
         }),
       });
 
@@ -648,11 +651,13 @@ export default function Home() {
                   streamingContent={streamingContent}
                   isLoading={sendMessageMutation.isPending}
                   language={selectedLanguage}
+                  onNewAssistantMessage={(msg) => {
+                    speakText(msg.content, { lang: getSpeechLocale(selectedLanguage) });
+                  }}
                 />
               </div>
               <MessageInput
                 onSend={handleSendMessage}
-                onOpenVoiceMode={() => setVoiceModeOpen(true)}
                 disabled={sendMessageMutation.isPending || !isSessionActive}
                 placeholder={copy.messagePlaceholder}
                 language={selectedLanguage}
@@ -661,15 +666,6 @@ export default function Home() {
           </div>
         )}
       </main>
-      <VoiceModeDialog
-        open={voiceModeOpen}
-        onOpenChange={setVoiceModeOpen}
-        onSend={(message) => handleSendMessage(message)}
-        disabled={sendMessageMutation.isPending || !isSessionActive}
-        latestAssistantMessage={latestAssistantMessage}
-        language={selectedLanguage}
-        description={copy.voiceModeDescription}
-      />
     </div>
   );
 }

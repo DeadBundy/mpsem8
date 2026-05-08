@@ -20,9 +20,10 @@ export default function History() {
   });
 
   const formatDuration = (seconds: number | null) => {
+    const safeSeconds = Math.max(0, seconds || 0);
     if (!seconds) return copy.inProgress;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const mins = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
     return `${mins}m ${secs}s`;
   };
 

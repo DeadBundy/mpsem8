@@ -21,7 +21,11 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<any> {
-  const res = await fetch(url, {
+  const { apiUrl } = await import("./api");
+  const res = await fetch(apiUrl(url), {
+
+
+
     method,
     headers: {
       "Content-Type": "application/json",
