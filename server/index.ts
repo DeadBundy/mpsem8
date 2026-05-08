@@ -54,42 +54,101 @@ if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
   serveStatic(app);
 }
 
-// Local dev server setup
-if (process.env.NODE_ENV === "development" && !process.env.VERCEL) {
-  (async () => {
-    const listenOptions: { port: number; host: string; reusePort?: boolean } = {
-      port: parseInt(process.env.PORT || "5000", 10),
-      host: "0.0.0.0",
-    };
+// ---------- Startup logging + hardening ----------
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+  console.error(err?.stack || String(err));
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+  // @ts-expect-error - reason may not be an Error
+  console.error(reason?.stack || String(reason));
+});
 
-    if (process.platform !== "win32") {
-      listenOptions.reusePort = true;
+function envPresence(name: string) {
+  return {
+    exists: Boolean(process.env[name]),
+    valuePreview: process.env[name] ? String(process.env[name]).slice(0, 4) + "…" : undefined,
+  };
+}
+
+console.log("[startup] NODE_ENV=", process.env.NODE_ENV);
+console.log("[startup] VERCEL=", Boolean(process.env.VERCEL));
+console.log("[startup] PORT=", process.env.PORT);
+console.log("[startup] env checks:", {
+  DATABASE_URL: envPresence("DATABASE_URL"),
+  OPENAI_API_KEY: envPresence("OPENAI_API_KEY"),
+  GROQ_API_KEY: envPresence("GROQ_API_KEY"),
+  JWT_SECRET: envPresence("JWT_SECRET"),
+});
+
+function startListening(listenOptions: { port: number; host: string; reusePort?: boolean }) {
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    console.error("[server error]", error);
+    if (error.code === "EADDRINUSE") {
+      log(`port ${listenOptions.port} is busy, retrying on a random open port`, "express");
+      server.listen({ host: listenOptions.host, port: 0 }, () => {
+        const address = server.address() as AddressInfo | null;
+        log(`serving on port ${address?.port ?? "unknown"}`);
+      });
+      return;
     }
+    throw error;
+  });
 
-    try {
-      await setupVite(app, server);
-    } catch (e) {
-      console.error("Failed to setup Vite:", e);
-    }
+  server.listen(listenOptions, () => {
+    log(`serving on port ${listenOptions.port}`);
+  });
+}
 
-    server.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "EADDRINUSE") {
-        log(`port ${listenOptions.port} is busy, retrying on a random open port`, "express");
-        server.listen({ host: listenOptions.host, port: 0 }, () => {
-          const address = server.address() as AddressInfo | null;
-          log(`serving on port ${address?.port ?? "unknown"}`);
-        });
-        return;
+async function boot() {
+  try {
+    console.log("STEP 1 PASSED: express app created + routes registered");
+
+    // Local dev server setup
+    if (process.env.NODE_ENV === "development" && !process.env.VERCEL) {
+      console.log("STEP 2 PASSED: entering dev mode");
+      const listenOptions: { port: number; host: string; reusePort?: boolean } = {
+        port: parseInt(process.env.PORT || "5000", 10),
+        host: "0.0.0.0",
+      };
+
+      if (process.platform !== "win32") {
+        listenOptions.reusePort = true;
       }
 
-      throw error;
-    });
+      try {
+        console.log("STEP 3 STARTED: setupVite");
+        await setupVite(app, server);
+        console.log("STEP 3 PASSED: setupVite");
+      } catch (e) {
+        console.error("STEP 3 FAILED: setupVite", e);
+      }
 
-    server.listen(listenOptions, () => {
-      log(`serving on port ${listenOptions.port}`);
-    });
-  })();
+      console.log("STEP 4 STARTED: listen (dev)");
+      startListening(listenOptions);
+      console.log("STEP 4 CALLED: listen (dev)");
+      return;
+    }
+
+    // Production/Render: ensure we actually listen.
+    console.log("STEP 2 PASSED: entering production/Render mode");
+    const port = parseInt(process.env.PORT || "5000", 10);
+    console.log("STEP 3 PASSED: resolved PORT", port);
+
+    // serveStatic already configured earlier
+    console.log("STEP 4 STARTED: listen (prod)");
+    startListening({ port, host: "0.0.0.0" });
+    console.log("STEP 4 CALLED: listen (prod)");
+  } catch (err) {
+    console.error("STEP BOOT FAILED (fatal)", err);
+    console.error((err as any)?.stack || String(err));
+    process.exit(1);
+  }
 }
+
+boot();
 
 // Export for Vercel serverless
 export default app;
+
