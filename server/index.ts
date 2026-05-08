@@ -1,8 +1,10 @@
 import "./env";
 import express, { type Request, Response, NextFunction } from "express";
 import type { AddressInfo } from "net";
+import path from "path";
+
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 
 const app = express();
 app.use(express.json());
@@ -48,13 +50,9 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message });
 });
 
-// Setup static file serving for production
-if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-  console.log("Setting up production static serve");
-  serveStatic(app);
-}
-
 // ---------- Startup logging + hardening ----------
+process.env.NODE_ENV; // keep reference
+
 process.on("uncaughtException", (err) => {
   console.error("[uncaughtException]", err);
   console.error(err?.stack || String(err));
@@ -136,8 +134,15 @@ async function boot() {
     const port = parseInt(process.env.PORT || "5000", 10);
     console.log("STEP 3 PASSED: resolved PORT", port);
 
-    // serveStatic already configured earlier
+    const distPath = path.resolve(process.cwd(), "dist");
+    // Railway/Render: serve built React app from /dist
+    app.use(express.static(distPath));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+
     console.log("STEP 4 STARTED: listen (prod)");
+
     startListening({ port, host: "0.0.0.0" });
     console.log("STEP 4 CALLED: listen (prod)");
   } catch (err) {
